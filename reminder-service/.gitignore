@@ -1,0 +1,7 @@
+reminder-service
+*.db
+*.exe
+*.dll
+*.lib
+*.dylib
+.env
