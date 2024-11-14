@@ -1,3 +1,5 @@
+// Copyright (c) 2024 Heise Medien GmbH & Co. KG, Oliver Lau <ola@ct.de>
+
 (function (window) {
     const LOCALSTORAGE = {
         KEY: {
@@ -39,22 +41,16 @@
             h: "Stunde(n)",
             d: "Tag(e)",
         };
-        static DEFAULT_REMINDERS = [
-            { n: 30, unit: "s" },
-            { n: 10, unit: "m" },
-            { n: 1, unit: "h" },
-            { n: 24, unit: "h" },
-            { n: -1, unit: "s" },
-        ];
         constructor() {
             super();
             this._internals = this.attachInternals();
+            this._reminders = {}; // { uuid: { n: Number, unit: String } }
         }
         get valid() {
             return this._internals.states.has("valid");
         }
         get reminders() {
-            return Object.values(this._reminders).map(r => r.n * TimeSpanSelector.UNITS[r.unit]);
+            return Object.values(this._reminders);
         }
         connectedCallback() {
             this._shadow = this.attachShadow({ mode: "open" });
@@ -212,8 +208,8 @@ div {
                 }
                 else {
                     inputs[i].classList.remove("invalid");
-                    inputs[i + 1].classList.remove("invalid");
                     inputs[i].title = "";
+                    inputs[i + 1].classList.remove("invalid");
                     inputs[i + 1].title = "";
                 }
             }
@@ -230,8 +226,7 @@ div {
         }
         _buildReminders() {
             let divs = [];
-            for (const uuid in this._reminders) {
-                const reminder = this._reminders[uuid];
+            for (const [uuid, reminder] of Object.entries(this._reminders)) {
                 const div = this.addReminder(reminder, uuid);
                 divs.push(div);
             }
@@ -336,7 +331,7 @@ div {
             "title": el.title.value,
             "message": el.message.value,
             "channel_url": el.channelUrl.value,
-            "reminders": el.timeSpanSelector.reminders,
+            "reminders": el.timeSpanSelector.reminders.map(r => r.n * TimeSpanSelector.UNITS[r.unit]),
         };
     }
 
@@ -391,6 +386,7 @@ div {
         e.stopImmediatePropagation();
         showStatus("Erinnerungen werden eingerichtet &hellip;", { withProgressBar: true });
         const appointment_data = mkAppointmentObject();
+        console.debug(appointment_data);
         abortController = new AbortController();
         const signal = AbortSignal.any([AbortSignal.timeout(20000), abortController.signal]);
         fetch(API.ENDPOINT.SCHEDULE,
@@ -439,22 +435,60 @@ div {
 
     function checkForm() {
         let ok = true;
-        if (el.date.value !== "" && el.startTime.value !== "" && el.endTime.value !== ""
-            && mkDate(el.date.value, el.startTime.value) > mkDate(el.date.value, el.endTime.value)) {
-            el.startTime.classList.add("invalid");
-            el.endTime.classList.add("invalid");
-            el.startTime.nextSibling.textContent = "Start darf nicht nach dem Ende sein.";
+        // check for plausible date
+        const today = new Date();
+        const todayDateISO = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
+        const todayTimeISO = `${today.getHours().toString().padStart(2, "0")}:${today.getMinutes().toString().padStart(2, "0")}`;
+        if (el.date.value !== "" && todayDateISO > el.date.value) {
+            el.date.classList.add("invalid");
+            el.date.nextSibling.textContent = "Das Datum liegt in der Vergangenheit.";
             ok = false;
         }
         else {
-            el.startTime.classList.remove("invalid");
-            el.endTime.classList.remove("invalid");
-            el.startTime.nextSibling.textContent = "";
+            el.date.classList.remove("invalid");
+            el.date.nextSibling.textContent = "";
+        }
+        if (todayDateISO === el.date.value) {
+            // check for valid start time
+            if (el.startTime.value !== "" && todayTimeISO > el.startTime.value) {
+                el.startTime.classList.add("invalid");
+                el.startTime.nextSibling.textContent = "Die Uhrzeit liegt in der Vergangenheit.";
+                ok = false;
+            }
+            else {
+                el.startTime.classList.remove("invalid");
+                el.startTime.nextSibling.textContent = "";
+            }
+            // check for valid start time
+            if (el.endTime.value !== "" && todayTimeISO > el.endTime.value) {
+                el.endTime.classList.add("invalid");
+                el.endTime.nextSibling.textContent = "Die Uhrzeit liegt in der Vergangenheit.";
+                ok = false;
+            }
+            else {
+                el.endTime.classList.remove("invalid");
+                el.endTime.nextSibling.textContent = "";
+            }
+        }
+        else {
+            // check if end time is after start time
+            if (el.date.value !== "" && el.startTime.value !== "" && el.endTime.value !== ""
+                && mkDate(el.date.value, el.startTime.value) > mkDate(el.date.value, el.endTime.value)) {
+                el.startTime.classList.add("invalid");
+                el.endTime.classList.add("invalid");
+                el.startTime.nextSibling.textContent = "Start darf nicht nach dem Ende sein.";
+                ok = false;
+            }
+            else {
+                el.startTime.classList.remove("invalid");
+                el.endTime.classList.remove("invalid");
+                el.startTime.nextSibling.textContent = "";
+            }
         }
         if (
             ok
             && el.form.checkValidity()
-            && el.timeSpanSelector.valid
+            && el.timeSpanSelector.checkValidity()
         ) {
             enableForm();
         }
@@ -479,16 +513,16 @@ div {
         });
         el.date = document.querySelector("#date");
         el.date.addEventListener("input", e => {
-            checkForm();
             if (el.startTime.value !== "")
                 el.timeSpanSelector.setAttribute("date-time", mkDate(e.target.value, el.startTime.value).toISOString());
+            checkForm();
             localStorage.setItem(LOCALSTORAGE.KEY.DATE, e.target.value);
         });
         el.startTime = document.querySelector("#start-time");
         el.startTime.addEventListener("input", e => {
-            checkForm();
             if (el.date.value !== "")
                 el.timeSpanSelector.setAttribute("date-time", mkDate(el.date.value, e.target.value).toISOString());
+            checkForm();
             localStorage.setItem(LOCALSTORAGE.KEY.START_TIME, e.target.value);
         });
         el.startTime.addEventListener("invalid", disableForm);
