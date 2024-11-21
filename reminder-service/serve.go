@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"slices"
+	"strings"
 	"syscall"
 	"time"
 
@@ -43,6 +44,13 @@ type ReminderInfo struct {
 type Endpoint struct {
 	path    string
 	handler func(w http.ResponseWriter, r *http.Request)
+}
+
+type ErrorResponse struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
 }
 
 var (
@@ -151,7 +159,29 @@ func If[T any](cond bool, vtrue, vfalse T) T {
 	return vfalse
 }
 
+func timeUntil(t time.Time) string {
+	timeUntil := time.Until(t)
+	if timeUntil < 0 {
+		timeUntil = 0
+	}
+	timeUntil = timeUntil.Round(time.Second)
+	if timeUntil < time.Minute {
+		return fmt.Sprintf("%d %s", int(timeUntil.Seconds()), If(timeUntil.Seconds() == 1, "Sekunde", "Sekunden"))
+	}
+	timeUntil = timeUntil.Round(time.Minute)
+	if timeUntil < time.Hour {
+		return fmt.Sprintf("%d %s", int(timeUntil.Minutes()), If(timeUntil.Minutes() == 1, "Minute", "Minuten"))
+	}
+	timeUntil = timeUntil.Round(time.Hour)
+	if timeUntil < 12*time.Hour {
+		return fmt.Sprintf("%d %s", int(timeUntil.Hours()), If(timeUntil.Hours() == 1, "Stunde", "Stunden"))
+	}
+	days := int(timeUntil.Hours()) / 24
+	return fmt.Sprintf("%d %s", days, If(days == 1, "Tag", "Tage"))
+}
+
 func sendAppointmentReminder(appointment Appointment) error {
+	message := strings.ReplaceAll(appointment.Message, "%t", timeUntil(appointment.BeginDateTime))
 	data := map[string]interface{}{
 		"type": "Message",
 		"attachments": []map[string]interface{}{
@@ -172,7 +202,7 @@ func sendAppointmentReminder(appointment Appointment) error {
 						},
 						map[string]interface{}{
 							"type": "TextBlock",
-							"text": appointment.Message,
+							"text": message,
 							"wrap": true,
 						},
 						map[string]interface{}{
@@ -238,7 +268,21 @@ func sendAppointmentReminder(appointment Appointment) error {
 		log.Printf("Error reading response body: %v", err)
 		return err
 	}
-	log.Printf("Appointment reminder sent. Response: `%s`", body)
+	if len(body) == 0 {
+		log.Printf("Appointment reminder sent. Response: `%s`", body)
+		return nil
+	}
+	var potentialErrorMessage ErrorResponse
+	err = json.Unmarshal(body, &potentialErrorMessage)
+	if err != nil {
+		log.Printf("Error unmarshaling JSON response: %v; data received: `%v`", err, body)
+		return err
+	}
+	log.Printf("Appointment reminder NOT sent. %s: `%s`",
+		potentialErrorMessage.Error.Code, potentialErrorMessage.Error.Message)
+	if len(potentialErrorMessage.Error.Code) > 0 {
+		return fmt.Errorf("%s: %s", potentialErrorMessage.Error.Code, potentialErrorMessage.Error.Message)
+	}
 	return nil
 }
 
@@ -290,21 +334,31 @@ func removeDuplicateReminders(appointment *Appointment) {
 
 func scheduleReminders(appointment Appointment) ([]ReminderInfo, error) {
 	scheduledReminders := []ReminderInfo{}
+	var err error
 	for _, duration := range appointment.Reminders {
-		if duration < 0 {
-			sendAppointmentReminder(appointment)
+		notificationTime := appointment.BeginDateTime.Add(time.Duration(-duration) * time.Second)
+		reminderID := generateUniqueID(notificationTime, appointment)
+		if _, timerPresent := timers[reminderID]; timerPresent {
 			continue
 		}
-		notificationTime := appointment.BeginDateTime.Add(time.Duration(-duration) * time.Second)
+		if duration < 0 {
+			err = sendAppointmentReminder(appointment)
+			if err != nil {
+				return nil, err
+			} else {
+				continue
+			}
+		}
 		timeUntilNotification := time.Until(notificationTime)
 		if timeUntilNotification < 0 {
 			continue
 		}
 		timer := time.AfterFunc(timeUntilNotification, func() {
+			delete(timers, reminderID)
 			sendAppointmentReminder(appointment)
 			log.Printf("%s: %s", timeUntilNotification, appointment.Title)
 		})
-		reminderID := generateUniqueID(notificationTime, appointment)
+
 		log.Printf("Reminding %d secs before appointment (%v), current time: %v, time until notification: %v, ID: %s",
 			duration, notificationTime, time.Now(), timeUntilNotification, reminderID)
 		timers[reminderID] = &TimerData{Timer: timer, ID: reminderID, Appointment: appointment}
@@ -320,9 +374,10 @@ func handleReminderSchedule(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// TODO: validate appointment like in checkForm() (see frontend)
+	removeDuplicateReminders(&appointment)
 	var success bool = true
 	var errMsg string
-	removeDuplicateReminders(&appointment)
 	scheduledReminders, err := scheduleReminders(appointment)
 	if err != nil {
 		log.Printf("Scheduling reminders() failed: %v", err)
@@ -446,6 +501,7 @@ func loadAppointments(db *sql.DB) ([]Appointment, error) {
 		if err := json.Unmarshal([]byte(reminders), &a.Reminders); err != nil {
 			return nil, err
 		}
+		// TODO: remove reminders that are in the past, also update appointment in database
 		appointments = append(appointments, a)
 	}
 	return appointments, nil
@@ -457,6 +513,8 @@ func main() {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
 	webhook_url = os.Getenv("WEBHOOK_URL")
+	log.Printf("Reminder Service starting up.")
+	log.Printf("Will send requests to webhook URL '%s'", webhook_url)
 
 	loc, err = time.LoadLocation("Europe/Berlin")
 	if err != nil {
