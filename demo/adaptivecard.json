@@ -1,0 +1,55 @@
+{
+  "type": "Message",
+  "attachments": [
+    {
+      "contentType": "application/vnd.microsoft.card.adaptive",
+      "contentUrl": null,
+      "content": {
+        "type": "AdaptiveCard",
+        "body": [
+          {
+            "type": "TextBlock",
+            "size": "large",
+            "weight": "bold",
+            "text": "DevOps",
+            "style": "heading",
+            "wrap": true
+          },
+          {
+            "type": "Image",
+            "url": "http://adaptivecards.io/content/cats/2.png"
+          },
+          {
+            "type": "TextBlock",
+            "text": "Diese Nachricht soll dich daran erinnern, dass bald unsere große Jahresauftaktversammlung stattfindet:",
+            "wrap": false
+          },
+          {
+            "type": "FactSet",
+            "facts": [
+              {
+                "title": "Datum",
+                "value": "16.01.2024"
+              },
+              {
+                "title": "Uhrzeit",
+                "value": "15:30"
+              },
+              {
+                "title": "Ort",
+                "value": "Teams"
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.OpenUrl",
+            "title": "Meeting-Kanal öffnen",
+            "url": "https://teams.microsoft.com/l/channel/..."
+          }
+        ]
+      }
+    }
+  ]
+}
