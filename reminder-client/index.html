@@ -16,6 +16,7 @@
 </head>
 
 <body>
+    <div class="bg"></div>
     <h1>Erinnerungshelferlein für Teams</h1>
     <form>
         <div><label for="title">Überschrift</label></div>
@@ -23,7 +24,7 @@
             <input type="text" id="title" name="title" required placeholder="hier Überschrift einsetzen" /><span
                 class="validity"></span>
         </div>
-        <div><label for="message">Nachricht</label></div>
+        <div><label for="message">Nachricht</label><span class="help" data-topic="help-message"></span></div>
         <div>
             <textarea id="message" name="message" placeholder="hier Nachricht eintippen (darf leer sein)"></textarea>
         </div>
@@ -44,8 +45,8 @@
             <input type="url" required pattern="https://.*" id="channel-url" name="channel-url"
                 placeholder="hier Link auf Teams-Kanal/Chat einsetzen" /><span class="validity"></span>
         </div>
-        <div><label>Erinnerungen</label></div>
-        <div><timespan-selector></timespan-selector></div>
+        <div><label>Erinnerungen</label><span class="help" data-topic="help-reminders"></span></div>
+        <div style="margin-top: 1ex;"><timespan-selector></timespan-selector></div>
         <div></div>
         <div>
             <button id="submit-button">An Teams-Kanal/Chat senden</button>
@@ -56,6 +57,16 @@
         <div id="progressbar"></div>
         <div class="status-text"></div>
     </div>
+    <div id="help-floater" class="hidden"><div></div><div>╳</div></div>
+    <template id="help-message">
+        <div>Tippe hier ein paar nützliche Informationen über die Veranstaltung ein.
+            Der Platzhalter <code>%t</code> wird durch die Zeit bis zum Beginn der Veranstaltung ersetzt,
+            also etwa „5 Minuten“, „1 Stunde“ oder „3 Tage“.</div>
+    </template>
+    <template id="help-reminders">
+        <div>Negative Werte führen dazu, dass die Erinnerung <em>sofort</em> beim Absenden
+            des Formulars an den Teams-Kanal/Chat geschickt wird.</div>
+    </template>
 </body>
 
 </html>
