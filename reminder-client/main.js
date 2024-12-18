@@ -5,10 +5,7 @@
     const PORT = 3421;
     const MILLISECONDS = 1000;
     const API = {
-        ENDPOINT: {
-            SCHEDULE: `http://${HOSTNAME}:${PORT}/api/v1/appointment/schedule`,
-            CANCEL: `http://${HOSTNAME}:${PORT}/api/v1/appointment/cancel`,
-        }
+        ENDPOINT: `http://${HOSTNAME}:${PORT}/api/v1/appointment`,
     };
     const LOCALSTORAGE = {
         KEY: {
@@ -372,9 +369,9 @@ div {
         const appointment_data = mkAppointmentObject();
         abortController = new AbortController();
         const signal = AbortSignal.any([AbortSignal.timeout(CONFIG.REQUEST_TIMEOUT_MS), abortController.signal]);
-        fetch(API.ENDPOINT.CANCEL,
+        fetch(API.ENDPOINT,
             {
-                method: "POST",
+                method: "DELETE",
                 body: JSON.stringify(appointment_data),
                 headers: {
                     "Content-Type": "application/json",
@@ -419,7 +416,7 @@ div {
         console.debug(appointment_data);
         abortController = new AbortController();
         const signal = AbortSignal.any([AbortSignal.timeout(20000), abortController.signal]);
-        fetch(API.ENDPOINT.SCHEDULE,
+        fetch(API.ENDPOINT,
             {
                 method: "POST",
                 body: JSON.stringify(appointment_data),
