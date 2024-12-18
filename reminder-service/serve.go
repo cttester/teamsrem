@@ -5,10 +5,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"slices"
@@ -41,11 +43,6 @@ type ReminderInfo struct {
 	TimePoint time.Time `json:"time_point"`
 }
 
-type Endpoint struct {
-	path    string
-	handler func(w http.ResponseWriter, r *http.Request)
-}
-
 type ErrorResponse struct {
 	Error struct {
 		Code    string `json:"code"`
@@ -60,6 +57,34 @@ var (
 	webhook_url  string
 	loc          *time.Location
 )
+
+func If[T any](cond bool, vtrue, vfalse T) T {
+	if cond {
+		return vtrue
+	}
+	return vfalse
+}
+
+func timeUntil(t time.Time) string {
+	timeUntil := time.Until(t)
+	if timeUntil < 0 {
+		timeUntil = 0
+	}
+	timeUntil = timeUntil.Round(time.Second)
+	if timeUntil < time.Minute {
+		return fmt.Sprintf("%d %s", int(timeUntil.Seconds()), If(timeUntil.Seconds() == 1, "Sekunde", "Sekunden"))
+	}
+	timeUntil = timeUntil.Round(time.Minute)
+	if timeUntil < time.Hour {
+		return fmt.Sprintf("%d %s", int(timeUntil.Minutes()), If(timeUntil.Minutes() == 1, "Minute", "Minuten"))
+	}
+	timeUntil = timeUntil.Round(time.Hour)
+	if timeUntil < 12*time.Hour {
+		return fmt.Sprintf("%d %s", int(timeUntil.Hours()), If(timeUntil.Hours() == 1, "Stunde", "Stunden"))
+	}
+	days := int(timeUntil.Hours()) / 24
+	return fmt.Sprintf("%d %s", days, If(days == 1, "Tag", "Tage"))
+}
 
 func sendAppointmentCancellation(appointment Appointment) {
 	data := map[string]interface{}{
@@ -150,34 +175,6 @@ func sendAppointmentCancellation(appointment Appointment) {
 		return
 	}
 	log.Printf("Cancellation sent. Response: `%s`", body)
-}
-
-func If[T any](cond bool, vtrue, vfalse T) T {
-	if cond {
-		return vtrue
-	}
-	return vfalse
-}
-
-func timeUntil(t time.Time) string {
-	timeUntil := time.Until(t)
-	if timeUntil < 0 {
-		timeUntil = 0
-	}
-	timeUntil = timeUntil.Round(time.Second)
-	if timeUntil < time.Minute {
-		return fmt.Sprintf("%d %s", int(timeUntil.Seconds()), If(timeUntil.Seconds() == 1, "Sekunde", "Sekunden"))
-	}
-	timeUntil = timeUntil.Round(time.Minute)
-	if timeUntil < time.Hour {
-		return fmt.Sprintf("%d %s", int(timeUntil.Minutes()), If(timeUntil.Minutes() == 1, "Minute", "Minuten"))
-	}
-	timeUntil = timeUntil.Round(time.Hour)
-	if timeUntil < 12*time.Hour {
-		return fmt.Sprintf("%d %s", int(timeUntil.Hours()), If(timeUntil.Hours() == 1, "Stunde", "Stunden"))
-	}
-	days := int(timeUntil.Hours()) / 24
-	return fmt.Sprintf("%d %s", days, If(days == 1, "Tag", "Tage"))
 }
 
 func sendAppointmentReminder(appointment Appointment) error {
@@ -292,6 +289,14 @@ func generateUniqueID(notificationTime time.Time, reminder Appointment) string {
 			notificationTime.Format(time.RFC3339), reminder.BeginDateTime.Format(time.RFC3339), reminder.Title))).String()
 }
 
+func isValidURL(str string) bool {
+	u, err := url.Parse(str)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return false
+	}
+	return true
+}
+
 func appointmentExists(appointment Appointment) (bool, error) {
 	var rowCount int
 	appointment_rows, err := db.Query(`
@@ -367,36 +372,61 @@ func scheduleReminders(appointment Appointment) ([]ReminderInfo, error) {
 	return scheduledReminders, nil
 }
 
-func handleReminderSchedule(w http.ResponseWriter, r *http.Request) {
+func sendJSONResponse(w http.ResponseWriter, response map[string]interface{}) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Encoding JSON reply failed", http.StatusBadRequest)
+		return errors.New("encoding JSON reply failed")
+	}
+	return nil
+}
+
+func handleAppointmentSchedule(w http.ResponseWriter, r *http.Request) error {
 	var appointment Appointment
-	if err := json.NewDecoder(r.Body).Decode(&appointment); err != nil {
-		log.Printf("Decoding JSON data failed with %s", err.Error())
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	var errMsg []string
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&appointment); err != nil {
+		errMsg = append(errMsg, fmt.Sprintf("Decoding JSON data failed with %s", err.Error()))
 	}
-	// TODO: validate appointment like in checkForm() (see frontend)
 	removeDuplicateReminders(&appointment)
-	var success bool = true
-	var errMsg string
-	scheduledReminders, err := scheduleReminders(appointment)
-	if err != nil {
-		log.Printf("Scheduling reminders() failed: %v", err)
-		success = false
-		errMsg = err.Error()
+	// TODO: validate appointment like in checkForm() (see frontend)
+	if appointment.BeginDateTime.IsZero() {
+		errMsg = append(errMsg, "field BeginDateTime is required")
 	}
-	if err := saveAppointment(appointment); err != nil {
-		log.Printf("Saving appointment failed: %v", err)
-		success = false
-		errMsg = err.Error()
+	if appointment.EndDateTime.IsZero() {
+		errMsg = append(errMsg, "field EndDateTime is required")
+	}
+	if len(appointment.Title) == 0 {
+		errMsg = append(errMsg, "field Title is required")
+	}
+	if len(appointment.Reminders) == 0 {
+		errMsg = append(errMsg, "field Reminders is missing or empty")
+	}
+	if !isValidURL(appointment.ChannelURL) {
+		errMsg = append(errMsg, "channel URL is not a valid URL")
+	}
+	var scheduledReminders []ReminderInfo
+	var err error
+	if len(errMsg) == 0 {
+		scheduledReminders, err = scheduleReminders(appointment)
+		if err != nil {
+			log.Printf("Scheduling reminders() failed: %v", err)
+			errMsg = append(errMsg, err.Error())
+		}
+		if err := saveAppointment(appointment); err != nil {
+			log.Printf("Saving appointment failed: %v", err)
+			errMsg = append(errMsg, err.Error())
+		}
 	}
 	response := map[string]interface{}{
-		"success":   success,
+		"success":   len(errMsg) == 0,
 		"error":     errMsg,
 		"reminders": scheduledReminders,
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	err = sendJSONResponse(w, response)
+	return err
 }
 
 func cancelTimer(id string) error {
@@ -428,12 +458,12 @@ func cancelReminders(appointment Appointment) ([]ReminderInfo, error) {
 	return canceledReminders, nil
 }
 
-func handleReminderCancel(w http.ResponseWriter, r *http.Request) {
+func handleAppointmentCancel(w http.ResponseWriter, r *http.Request) error {
 	var appointment Appointment
 	if err := json.NewDecoder(r.Body).Decode(&appointment); err != nil {
 		log.Printf("Decoding JSON data failed with %s", err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return err
 	}
 	canceledReminders, err := cancelReminders(appointment)
 	if err != nil {
@@ -442,7 +472,7 @@ func handleReminderCancel(w http.ResponseWriter, r *http.Request) {
 			"success": false,
 			"error":   err.Error(),
 		})
-		return
+		return err
 	}
 	err = deleteAppointment(appointment)
 	if err != nil {
@@ -451,7 +481,7 @@ func handleReminderCancel(w http.ResponseWriter, r *http.Request) {
 			"success": false,
 			"error":   err.Error(),
 		})
-		return
+		return err
 	}
 	sendAppointmentCancellation(appointment)
 	w.Header().Set("Content-Type", "application/json")
@@ -461,6 +491,20 @@ func handleReminderCancel(w http.ResponseWriter, r *http.Request) {
 		"success":   true,
 		"reminders": canceledReminders,
 	})
+	return nil
+}
+
+func handleAppointment(w http.ResponseWriter, r *http.Request) {
+	var err error
+	switch r.Method {
+	case http.MethodPost:
+		err = handleAppointmentSchedule(w, r)
+	case http.MethodDelete:
+		err = handleAppointmentCancel(w, r)
+	}
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Bad method: %s", r.Method), http.StatusMethodNotAllowed)
+	}
 }
 
 func createTables(db *sql.DB) error {
@@ -516,12 +560,12 @@ func main() {
 	log.Printf("Reminder Service starting up.")
 	log.Printf("Will send requests to webhook URL '%s'", webhook_url)
 
-	loc, err = time.LoadLocation("Europe/Berlin")
+	loc, err = time.LoadLocation(os.Getenv("LOCATION"))
 	if err != nil {
 		log.Fatalf("Error loading location: %v", err)
 	}
 
-	db, err = sql.Open("sqlite3", "./appointments.db")
+	db, err = sql.Open("sqlite3", os.Getenv("DB_FILE"))
 	if err != nil {
 		log.Fatalf("Error opening database: %v", err)
 	}
@@ -541,19 +585,13 @@ func main() {
 		scheduleReminders(appointment)
 	}
 
-	r := http.NewServeMux()
-	endpoints := []Endpoint{
-		{os.Getenv("API_ENDPOINT_SCHEDULE"), handleReminderSchedule},
-		{os.Getenv("API_ENDPOINT_CANCEL"), handleReminderCancel},
-	}
-	for _, endpoint := range endpoints {
-		log.Printf("Serving http://%s:%s%s ...\n", os.Getenv("HOST"), os.Getenv("PORT"), endpoint.path)
-		r.HandleFunc(endpoint.path, endpoint.handler)
-	}
+	mux := http.NewServeMux()
+	log.Printf("Serving http://%s:%s%s ...\n", os.Getenv("HOST"), os.Getenv("PORT"), os.Getenv("API_ENDPOINT"))
+	mux.HandleFunc(os.Getenv("API_ENDPOINT"), handleAppointment)
 
 	srv := &http.Server{
 		Addr:    os.Getenv("HOST") + ":" + os.Getenv("PORT"),
-		Handler: r,
+		Handler: mux,
 	}
 
 	go func() {
