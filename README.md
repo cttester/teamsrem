@@ -4,7 +4,7 @@
 
 Beobachten Sie dann und wann an sich und Ihren Kollegen, dass sie nicht oder zu spät zu Videokonferenzen oder anderen Terminen erscheinen? Und das, obwohl Einladungen dazu per Mail oder auf anderen Kanälen herumgingen? Wenn Sie Teams zur Kommunikation verwenden, hilft Ihnen der *Teams Reminder*. In einem Frontend für den Webbrowser können Sie Erinnerungsnachrichten formulieren, die zu einstellbaren Zeitpunkten vor dem Ereignis automatisch an einen Teams-Kanal oder -Gruppenchat gesendet werden. Das erledigt ein in Go geschriebener Webservice ganz ohne Ihr Zutun im Hintergrund.
 
-![Im Frontend tippen Sie die Erinnerungsnachricht nebst Veranstaltungstermin ein und bestimmen die Zeitpunkte für die automatischen Erinnerungen.](https://github.com/user-attachments/assets/bbd7374a-bab9-4a75-bbeb-c8e64ab9adb3)
+![Im Frontend tippen Sie die Erinnerungsnachricht nebst Veranstaltungstermin ein und bestimmen die Zeitpunkte für die automatischen Erinnerungen.](https://github.com/user-attachments/assets/d7db7e67-4226-48ad-82ac-f0016fdd57ad)
 
 # Nutzungshinweise
 
