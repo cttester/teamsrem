@@ -7,6 +7,7 @@
     const API = {
         ENDPOINT: `http://${HOSTNAME}:${PORT}/api/v1/appointment`,
     };
+    console.debug(API.ENDPOINT);
     const LOCALSTORAGE = {
         KEY: {
             TITLE: "teams-reminder-title",
@@ -97,6 +98,11 @@ div {
     border-radius: 50%;
     background-color: transparent;
     cursor: pointer;
+    border: none;
+}
+.plus:focus {
+    outline: 4px solid var(--highlight-color);
+    outline-offset: 3px;
 }
 .plus > svg {
     fill: var(--dark-color);
@@ -113,7 +119,8 @@ div {
             this._shadow.appendChild(this._body);
             this._t0 = new Date(this.getAttribute("date-time"));
             this._reminders = Object.fromEntries(JSON.parse(this.getAttribute("reminders") || "[]").map(k => [crypto.randomUUID(), k]));
-            const plus = document.createElement("div");
+            const plus = document.createElement("button");
+            plus.setAttribute("aria-label", "Erinnerungszeitpunkt hinzufügen");
             plus.className = "plus";
             plus.innerHTML = `<svg width="100%" height="100%" viewBox="0 0 11.355 11.355" version="1.1" xmlns="http://www.w3.org/2000/svg">
               <path d="M5.678,11.355c3.135,0 5.677,-2.543 5.677,-5.677c0,-3.135 -2.543,-5.678 -5.677,-5.678c-3.135,0 -5.678,2.543 -5.678,5.678c-0,3.135 2.543,5.677 5.678,5.677Zm0,-1c-2.584,-0 -4.67,-2.092 -4.67,-4.676c-0,-2.584 2.086,-4.676 4.67,-4.676c2.584,-0 4.676,2.092 4.676,4.676c-0,2.584 -2.092,4.676 -4.676,4.676Zm-2.573,-4.676c0,0.281 0.206,0.474 0.493,0.474l1.593,0l0,1.6c0,0.287 0.2,0.486 0.475,0.486c0.293,0 0.492,-0.199 0.492,-0.486l0,-1.6l1.6,0c0.281,0 0.486,-0.193 0.486,-0.474c0,-0.287 -0.199,-0.492 -0.486,-0.492l-1.6,-0l0,-1.588c0,-0.293 -0.199,-0.493 -0.492,-0.493c-0.275,0 -0.475,0.2 -0.475,0.493l0,1.588l-1.593,-0c-0.293,-0 -0.493,0.205 -0.493,0.492Z" style="fill-rule:nonzero;"/>
@@ -138,12 +145,6 @@ div {
                     break;
                 default: break;
             }
-        }
-        static async digestMessage(message) {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(message);
-            const hash = await window.crypto.subtle.digest("SHA-256", data);
-            return hash;
         }
         addReminder(reminder, uuid) {
             if (typeof uuid === "undefined") {
@@ -259,8 +260,7 @@ div {
     let checkInterval;
 
     function showStatus(msg, options = { withProgressBar: false, error: false }) {
-        el.form.classList.add("subtle");
-        el.status.classList.add("visible");
+        el.statusDialog.showModal();
         el.statusText.innerHTML = msg;
         if (options.error) {
             el.statusText.classList.add("error");
@@ -269,27 +269,22 @@ div {
             el.statusText.classList.remove("error");
         }
         if (options.withProgressBar) {
-            el.status.classList.add("with-progress-bar");
+            el.statusDialog.classList.add("with-progress-bar");
         }
         else {
-            el.status.classList.remove("with-progress-bar");
+            el.statusDialog.classList.remove("with-progress-bar");
         }
         disableForm();
     }
 
     function hideStatus() {
-        if (!el.status.classList.contains("visible"))
+        if (!el.statusDialog.open)
             return;
-        setTimeout(() => {
-            el.status.classList.remove("visible");
-            el.status.classList.remove("fade-out");
-        }, CONFIG.FADEOUT_MS);
-        el.form.classList.remove("subtle");
-        el.status.classList.add("fade-out");
+        el.statusDialog.close();
         enableForm();
     }
 
-    function disableForm(e) {
+    function disableForm() {
         el.submitButton.disabled = true;
         el.cancelButton.disabled = true;
     }
@@ -330,7 +325,11 @@ div {
         if (reminders)
             el.timeSpanSelector.setAttribute("reminders", reminders);
         if (el.date.value !== "" && el.startTime.value !== "")
-            el.timeSpanSelector.setAttribute("date-time", mkDate(el.date.value, el.startTime.value).toISOString());
+            el.timeSpanSelector.setAttribute("date-time", mkLocalDate(el.date.value, el.startTime.value).toISOString());
+
+        const invalidField = el.form.querySelector(":invalid");
+        if (invalidField)
+            invalidField.focus();
     }
 
     function onKeyUp(e) {
@@ -349,8 +348,8 @@ div {
     }
 
     function mkAppointmentObject() {
-        const t0 = mkDate(el.date.value, el.startTime.value);
-        const t1 = mkDate(el.date.value, el.endTime.value);
+        const t0 = mkLocalDate(el.date.value, el.startTime.value);
+        const t1 = mkLocalDate(el.date.value, el.endTime.value);
         console.debug(el.timeSpanSelector.reminders);
         return {
             "begin_datetime": `${t0.toISOString()}`,
@@ -452,63 +451,71 @@ div {
         return false;
     }
 
-    function mkDate(dateString, timeString) {
-        const date = new Date(dateString);
+    function mkLocalDate(dateString, timeString) {
+        const [year, month, day] = dateString.split('-').map(Number);
         const [hours, minutes] = timeString.split(':').map(Number);
-        const tzMS = date.getTimezoneOffset() * 60 * MILLISECONDS;
-        const utc = date.getTime() + tzMS + (hours * 60 * 60 + minutes * 60) * MILLISECONDS;
-        return new Date(utc);
+        const date = new Date(year, month - 1, day, hours, minutes);
+        return date;
+    }
+
+    const dateFormatter = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" });
+    const timeFormatter = new Intl.DateTimeFormat("en-CA", { hour: "2-digit", minute: "2-digit", hourCycle: 'h24' });
+
+    function nowDateTime() {
+        const now = new Date;
+        return [
+            dateFormatter.format(now),
+            timeFormatter.format(now),
+        ];
     }
 
     function checkForm() {
         let ok = true;
         // check for plausible date
-        const today = new Date();
-        const todayDateISO = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, "0")}-${today.getDate().toString().padStart(2, "0")}`;
-        const todayTimeISO = `${today.getHours().toString().padStart(2, "0")}:${today.getMinutes().toString().padStart(2, "0")}`;
-        if (el.date.value !== "" && todayDateISO > el.date.value) {
+        const [nowYYYYMMDD, nowHHmm] = nowDateTime();
+        if (el.date.value !== "" && nowYYYYMMDD > el.date.value) {
             el.date.classList.add("invalid");
-            el.date.nextSibling.textContent = "Das Datum liegt in der Vergangenheit.";
+            el.date.nextElementSibling.textContent = "Das Datum liegt in der Vergangenheit.";
             ok = false;
         }
         else {
             el.date.classList.remove("invalid");
-            el.date.nextSibling.textContent = "";
+            el.date.nextElementSibling.textContent = "";
         }
-        if (todayDateISO === el.date.value) {
+        if (nowYYYYMMDD === el.date.value) {
             // check for valid start time
-            if (el.startTime.value !== "" && todayTimeISO >= el.startTime.value) {
+            if (el.startTime.value !== "" && nowHHmm >= el.startTime.value) {
                 el.startTime.classList.add("invalid");
-                el.startTime.nextSibling.textContent = "Die Uhrzeit liegt in der Vergangenheit.";
+                el.startTime.nextElementSibling.textContent = "Die Uhrzeit liegt in der Vergangenheit.";
                 ok = false;
             }
             else {
                 el.startTime.classList.remove("invalid");
-                el.startTime.nextSibling.textContent = "";
+                el.startTime.nextElementSibling.textContent = "";
             }
             // check for valid start time
-            if (el.endTime.value !== "" && todayTimeISO >= el.endTime.value) {
+            if (el.endTime.value !== "" && nowHHmm >= el.endTime.value) {
                 el.endTime.classList.add("invalid");
-                el.endTime.nextSibling.textContent = "Die Uhrzeit liegt in der Vergangenheit.";
+                el.endTime.nextElementSibling.textContent = "Die Uhrzeit liegt in der Vergangenheit.";
                 ok = false;
             }
             else {
                 el.endTime.classList.remove("invalid");
-                el.endTime.nextSibling.textContent = "";
+                el.endTime.nextElementSibling.textContent = "";
             }
         }
         // check if end time is after start time
         if (el.date.value !== "" && el.startTime.value !== "" && el.endTime.value !== ""
-            && mkDate(el.date.value, el.startTime.value) > mkDate(el.date.value, el.endTime.value)) {
+            && `${el.date.value}T${el.startTime.value}` > `${el.date.value}T${el.endTime.value}`) {
             el.startTime.classList.add("invalid");
             el.endTime.classList.add("invalid");
-            el.startTime.nextSibling.textContent = "Start darf nicht nach dem Ende sein.";
+            el.startTime.nextElementSibling.textContent = "Start darf nicht nach dem Ende sein.";
             ok = false;
         }
         else {
             el.startTime.classList.remove("invalid");
             el.endTime.classList.remove("invalid");
-            el.startTime.nextSibling.textContent = "";
+            el.startTime.nextElementSibling.textContent = "";
         }
         if (
             ok
@@ -539,14 +546,16 @@ div {
         el.date = document.querySelector("#date");
         el.date.addEventListener("input", e => {
             if (el.startTime.value !== "")
-                el.timeSpanSelector.setAttribute("date-time", mkDate(e.target.value, el.startTime.value).toISOString());
+                el.timeSpanSelector.setAttribute("date-time", mkLocalDate(e.target.value, el.startTime.value).toISOString());
             checkForm();
             localStorage.setItem(LOCALSTORAGE.KEY.DATE, e.target.value);
         });
+        const [nowDateISO, _] = nowDateTime();
+        el.date.setAttribute("min", nowDateISO);
         el.startTime = document.querySelector("#start-time");
         el.startTime.addEventListener("input", e => {
             if (el.date.value !== "")
-                el.timeSpanSelector.setAttribute("date-time", mkDate(el.date.value, e.target.value).toISOString());
+                el.timeSpanSelector.setAttribute("date-time", mkLocalDate(el.date.value, e.target.value).toISOString());
             checkForm();
             localStorage.setItem(LOCALSTORAGE.KEY.START_TIME, e.target.value);
         });
@@ -565,11 +574,8 @@ div {
         el.submitButton.addEventListener("click", onSubmit);
         el.cancelButton = document.querySelector("#cancel-button");
         el.cancelButton.addEventListener("click", onCancel);
-        el.status = document.querySelector("#status");
-        el.statusText = el.status.querySelector(".status-text");
-        const extraStyles = document.createElement("style");
-        extraStyles.textContent = `:root { --fadeout-ms: ${CONFIG.FADEOUT_MS}ms; }`;
-        document.querySelector("head").appendChild(extraStyles);
+        el.statusDialog = document.querySelector("#status-dialog");
+        el.statusText = el.statusDialog.querySelector(".status-text");
         document.addEventListener("click", onDocumentClicked);
         document.addEventListener("keyup", onKeyUp);
         el.timeSpanSelector = document.querySelector("timespan-selector");
@@ -587,7 +593,7 @@ div {
             });
             const showHelp = e => {
                 const html = document.querySelector(`#${element.dataset.topic}`).content.cloneNode(true);
-                helpFloater.firstChild.replaceChildren(html);
+                helpFloater.querySelector("div:first-child").replaceChildren(html);
                 helpFloater.classList.remove("hidden");
                 helpFloater.style.top = `${e.target.offsetTop + 10}px`;
                 helpFloater.style.left = `calc(${e.target.offsetLeft}px + 1.5em + 10px)`;
@@ -595,7 +601,7 @@ div {
             element.addEventListener("mouseenter", showHelp);
         });
 
-        window.addEventListener("visibilitychange", e => {
+        document.addEventListener("visibilitychange", e => {
             if (e.target.visibilityState === "visible") {
                 checkForm();
                 checkInterval = setInterval(checkForm, 5000);
