@@ -32,12 +32,6 @@ type Appointment struct {
 	Reminders     []int     `json:"reminders"`
 }
 
-type TimerData struct {
-	Timer       *time.Timer
-	ID          string
-	Appointment Appointment
-}
-
 type ReminderInfo struct {
 	ID        string    `json:"id"`
 	TimePoint time.Time `json:"time_point"`
@@ -52,9 +46,9 @@ type ErrorResponse struct {
 
 var (
 	db           *sql.DB
-	timers       = map[string]*TimerData{}
+	timers       = map[string]*time.Timer{}
 	appointments []Appointment
-	webhook_url  string
+	webhookUrl   string
 	loc          *time.Location
 )
 
@@ -87,17 +81,17 @@ func timeUntil(t time.Time) string {
 }
 
 func sendAppointmentCancellation(appointment Appointment) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"type": "Message",
-		"attachments": []map[string]interface{}{
+		"attachments": []map[string]any{
 			{
 				"contentType": "application/vnd.microsoft.card.adaptive",
-				"content": map[string]interface{}{
+				"content": map[string]any{
 					"$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
 					"version": "1.5",
 					"type":    "AdaptiveCard",
-					"body": []interface{}{
-						map[string]interface{}{
+					"body": []any{
+						map[string]any{
 							"type":   "TextBlock",
 							"size":   "large",
 							"weight": "bolder",
@@ -106,34 +100,34 @@ func sendAppointmentCancellation(appointment Appointment) {
 							"style":  "heading",
 							"wrap":   true,
 						},
-						map[string]interface{}{
+						map[string]any{
 							"type": "TextBlock",
 							"text": "Folgendes Ereignis wurde abgesagt:",
 							"wrap": true,
 						},
-						map[string]interface{}{
+						map[string]any{
 							"type":   "TextBlock",
 							"text":   appointment.Title,
 							"style":  "heading",
 							"weight": "bolder",
 							"wrap":   true,
 						},
-						map[string]interface{}{
+						map[string]any{
 							"type": "FactSet",
-							"facts": []interface{}{
-								map[string]interface{}{
+							"facts": []any{
+								map[string]any{
 									"title": "Datum",
 									"value": appointment.BeginDateTime.In(loc).Format("02.01.2006"),
 								},
-								map[string]interface{}{
+								map[string]any{
 									"title": "Beginn",
 									"value": appointment.BeginDateTime.In(loc).Format("15:04"),
 								},
-								map[string]interface{}{
+								map[string]any{
 									"title": "Ende",
 									"value": appointment.EndDateTime.In(loc).Format("15:04"),
 								},
-								map[string]interface{}{
+								map[string]any{
 									"title": "Ort",
 									"value": "Teams",
 								},
@@ -152,7 +146,7 @@ func sendAppointmentCancellation(appointment Appointment) {
 	}
 
 	client := &http.Client{}
-	req, err := http.NewRequest(http.MethodPost, webhook_url, bytes.NewReader(jsonData))
+	req, err := http.NewRequest(http.MethodPost, webhookUrl, bytes.NewReader(jsonData))
 	if err != nil {
 		log.Printf("Error creating HTTP request: %v", err)
 		return
@@ -179,17 +173,17 @@ func sendAppointmentCancellation(appointment Appointment) {
 
 func sendAppointmentReminder(appointment Appointment) error {
 	message := strings.ReplaceAll(appointment.Message, "%t", timeUntil(appointment.BeginDateTime))
-	data := map[string]interface{}{
+	data := map[string]any{
 		"type": "Message",
-		"attachments": []map[string]interface{}{
+		"attachments": []map[string]any{
 			{
 				"contentType": "application/vnd.microsoft.card.adaptive",
-				"content": map[string]interface{}{
+				"content": map[string]any{
 					"$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
 					"version": "1.5",
 					"type":    "AdaptiveCard",
-					"body": []interface{}{
-						map[string]interface{}{
+					"body": []any{
+						map[string]any{
 							"type":   "TextBlock",
 							"size":   "large",
 							"weight": "bolder",
@@ -197,35 +191,35 @@ func sendAppointmentReminder(appointment Appointment) error {
 							"style":  "heading",
 							"wrap":   true,
 						},
-						map[string]interface{}{
+						map[string]any{
 							"type": "TextBlock",
 							"text": message,
 							"wrap": true,
 						},
-						map[string]interface{}{
+						map[string]any{
 							"type": "FactSet",
-							"facts": []interface{}{
-								map[string]interface{}{
+							"facts": []any{
+								map[string]any{
 									"title": "Datum",
 									"value": appointment.BeginDateTime.In(loc).Format("02.01.2006"),
 								},
-								map[string]interface{}{
+								map[string]any{
 									"title": "Beginn",
 									"value": appointment.BeginDateTime.In(loc).Format("15:04"),
 								},
-								map[string]interface{}{
+								map[string]any{
 									"title": "Ende",
 									"value": appointment.EndDateTime.In(loc).Format("15:04"),
 								},
-								map[string]interface{}{
+								map[string]any{
 									"title": "Ort",
 									"value": "Teams",
 								},
 							},
 						},
 					},
-					"actions": []interface{}{
-						map[string]interface{}{
+					"actions": []any{
+						map[string]any{
 							"type":  "Action.OpenUrl",
 							"title": appointment.Title,
 							"url":   appointment.ChannelURL,
@@ -243,7 +237,7 @@ func sendAppointmentReminder(appointment Appointment) error {
 	}
 
 	client := &http.Client{}
-	req, err := http.NewRequest(http.MethodPost, webhook_url, bytes.NewReader(jsonData))
+	req, err := http.NewRequest(http.MethodPost, webhookUrl, bytes.NewReader(jsonData))
 	if err != nil {
 		log.Printf("Error creating HTTP request: %v", err)
 		return err
@@ -283,15 +277,22 @@ func sendAppointmentReminder(appointment Appointment) error {
 	return nil
 }
 
-func generateUniqueID(notificationTime time.Time, reminder Appointment) string {
+func generateUniqueID(t time.Time, reminder Appointment) string {
 	return uuid.NewSHA1(uuid.Nil,
 		[]byte(fmt.Sprintf("%s-%s-%s",
-			notificationTime.Format(time.RFC3339), reminder.BeginDateTime.Format(time.RFC3339), reminder.Title))).String()
+			t.Format(time.RFC3339), reminder.BeginDateTime.Format(time.RFC3339), reminder.Title))).String()
 }
 
 func isValidURL(str string) bool {
-	u, err := url.Parse(str)
-	if err != nil || u.Scheme == "" || u.Host == "" {
+	url, err := url.Parse(str)
+	if err != nil {
+		return false
+	}
+	if url.Scheme != "http" &&
+		url.Scheme != "https" {
+		return false
+	}
+	if url.Host == "" {
 		return false
 	}
 	return true
@@ -299,14 +300,14 @@ func isValidURL(str string) bool {
 
 func appointmentExists(appointment Appointment) (bool, error) {
 	var rowCount int
-	appointment_rows, err := db.Query(`
+	appointmentRows, err := db.Query(`
         SELECT COUNT(*) FROM appointments WHERE begin_datetime = ? AND title = ?;
     `, appointment.BeginDateTime, appointment.Title)
 	if err != nil {
 		return false, err
 	}
-	defer appointment_rows.Close()
-	appointment_rows.Scan(&rowCount)
+	defer appointmentRows.Close()
+	appointmentRows.Scan(&rowCount)
 	return rowCount > 0, nil
 }
 
@@ -340,13 +341,13 @@ func removeDuplicateReminders(appointment *Appointment) {
 func scheduleReminders(appointment Appointment) ([]ReminderInfo, error) {
 	scheduledReminders := []ReminderInfo{}
 	var err error
-	for _, duration := range appointment.Reminders {
-		notificationTime := appointment.BeginDateTime.Add(time.Duration(-duration) * time.Second)
+	for _, secs := range appointment.Reminders {
+		notificationTime := appointment.BeginDateTime.Add(time.Duration(-secs) * time.Second)
 		reminderID := generateUniqueID(notificationTime, appointment)
 		if _, timerPresent := timers[reminderID]; timerPresent {
 			continue
 		}
-		if duration < 0 {
+		if secs < 0 {
 			err = sendAppointmentReminder(appointment)
 			if err != nil {
 				return nil, err
@@ -365,15 +366,16 @@ func scheduleReminders(appointment Appointment) ([]ReminderInfo, error) {
 		})
 
 		log.Printf("Reminding %d secs before appointment (%v), current time: %v, time until notification: %v, ID: %s",
-			duration, notificationTime, time.Now(), timeUntilNotification, reminderID)
-		timers[reminderID] = &TimerData{Timer: timer, ID: reminderID, Appointment: appointment}
+			secs, notificationTime, time.Now(), timeUntilNotification, reminderID)
+		timers[reminderID] = timer
 		scheduledReminders = append(scheduledReminders, ReminderInfo{reminderID, notificationTime})
 	}
 	return scheduledReminders, nil
 }
 
-func sendJSONResponse(w http.ResponseWriter, response map[string]interface{}) error {
+func sendJSONResponse(w http.ResponseWriter, response map[string]any) error {
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "Encoding JSON reply failed", http.StatusBadRequest)
@@ -391,12 +393,9 @@ func handleAppointmentSchedule(w http.ResponseWriter, r *http.Request) error {
 		errMsg = append(errMsg, fmt.Sprintf("Decoding JSON data failed with %s", err.Error()))
 	}
 	removeDuplicateReminders(&appointment)
-	// TODO: validate appointment like in checkForm() (see frontend)
-	if appointment.BeginDateTime.IsZero() {
-		errMsg = append(errMsg, "field BeginDateTime is required")
-	}
-	if appointment.EndDateTime.IsZero() {
-		errMsg = append(errMsg, "field EndDateTime is required")
+	println("%v", appointment.BeginDateTime.Format(time.RFC3339))
+	if appointment.BeginDateTime.Before(time.Now()) {
+		errMsg = append(errMsg, "BeginDateTime must not be in the past")
 	}
 	if len(appointment.Title) == 0 {
 		errMsg = append(errMsg, "field Title is required")
@@ -404,7 +403,7 @@ func handleAppointmentSchedule(w http.ResponseWriter, r *http.Request) error {
 	if len(appointment.Reminders) == 0 {
 		errMsg = append(errMsg, "field Reminders is missing or empty")
 	}
-	if !isValidURL(appointment.ChannelURL) {
+	if len(appointment.ChannelURL) > 0 && !isValidURL(appointment.ChannelURL) {
 		errMsg = append(errMsg, "channel URL is not a valid URL")
 	}
 	var scheduledReminders []ReminderInfo
@@ -420,7 +419,7 @@ func handleAppointmentSchedule(w http.ResponseWriter, r *http.Request) error {
 			errMsg = append(errMsg, err.Error())
 		}
 	}
-	response := map[string]interface{}{
+	response := map[string]any{
 		"success":   len(errMsg) == 0,
 		"error":     errMsg,
 		"reminders": scheduledReminders,
@@ -431,8 +430,8 @@ func handleAppointmentSchedule(w http.ResponseWriter, r *http.Request) error {
 
 func cancelTimer(id string) error {
 	log.Printf("Cancelling timer %s", id)
-	if timerInfo, ok := timers[id]; ok {
-		if timerInfo.Timer.Stop() {
+	if timer, ok := timers[id]; ok {
+		if timer.Stop() {
 			delete(timers, id)
 			log.Printf("Timer for reminder %s canceled successfully", id)
 			return nil
@@ -447,8 +446,8 @@ func cancelTimer(id string) error {
 
 func cancelReminders(appointment Appointment) ([]ReminderInfo, error) {
 	canceledReminders := []ReminderInfo{}
-	for _, duration := range appointment.Reminders {
-		notificationTime := appointment.BeginDateTime.Add(time.Duration(-duration) * time.Second)
+	for _, secs := range appointment.Reminders {
+		notificationTime := appointment.BeginDateTime.Add(time.Duration(-secs) * time.Second)
 		reminderID := generateUniqueID(notificationTime, appointment)
 		if err := cancelTimer(reminderID); err != nil {
 			continue
@@ -468,7 +467,7 @@ func handleAppointmentCancel(w http.ResponseWriter, r *http.Request) error {
 	canceledReminders, err := cancelReminders(appointment)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
 			"error":   err.Error(),
 		})
@@ -477,20 +476,25 @@ func handleAppointmentCancel(w http.ResponseWriter, r *http.Request) error {
 	err = deleteAppointment(appointment)
 	if err != nil {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"success": false,
 			"error":   err.Error(),
 		})
 		return err
 	}
 	sendAppointmentCancellation(appointment)
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	response := map[string]any{
 		"success":   true,
 		"reminders": canceledReminders,
-	})
+	}
+	err = sendJSONResponse(w, response)
+	return err
+}
+
+func handleOptions(w http.ResponseWriter, _ *http.Request) error {
+	w.Header().Set("Access-Control-Allow-Headers", "access-control-allow-origin,content-type")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(http.StatusOK)
 	return nil
 }
 
@@ -501,15 +505,18 @@ func handleAppointment(w http.ResponseWriter, r *http.Request) {
 		err = handleAppointmentSchedule(w, r)
 	case http.MethodDelete:
 		err = handleAppointmentCancel(w, r)
+	case http.MethodOptions:
+		err = handleOptions(w, r)
+	default:
+		http.Error(w, fmt.Sprintf("Bad method: %s", r.Method), http.StatusMethodNotAllowed)
 	}
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Bad method: %s", r.Method), http.StatusMethodNotAllowed)
+		http.Error(w, err.Error(), http.StatusForbidden)
 	}
 }
 
 func createTables(db *sql.DB) error {
-	var err error
-	_, err = db.Exec(`
+	_, err := db.Exec(`
         CREATE TABLE IF NOT EXISTS appointments (
             id INTEGER PRIMARY KEY,
             begin_datetime DATETIME NOT NULL,
@@ -517,10 +524,10 @@ func createTables(db *sql.DB) error {
             title TEXT NOT NULL,
             message TEXT,
             channel_url TEXT,
-			reminders TEXT
+            reminders TEXT
         );
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_appointments_title_datetime
-		ON appointments(begin_datetime, title);
+        CREATE INDEX IF NOT EXISTS idx_appointments_title_datetime
+        ON appointments(begin_datetime, title);
     `)
 	return err
 }
@@ -556,9 +563,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
-	webhook_url = os.Getenv("WEBHOOK_URL")
+	webhookUrl = os.Getenv("WEBHOOK_URL")
 	log.Printf("Reminder Service starting up.")
-	log.Printf("Will send requests to webhook URL '%s'", webhook_url)
+	log.Printf("Will send requests to webhook URL '%s'", webhookUrl)
+
+	log.Printf("Registered DB drivers: %v", sql.Drivers())
 
 	loc, err = time.LoadLocation(os.Getenv("LOCATION"))
 	if err != nil {
@@ -605,11 +614,11 @@ func main() {
 	<-quit
 
 	log.Println("Server shutting down ...")
-	for _, timer := range timers {
-		if timer.Timer.Stop() {
-			log.Printf("Timer for reminder %s canceled successfully", timer.ID)
+	for id, timer := range timers {
+		if timer.Stop() {
+			log.Printf("Timer for reminder %s canceled successfully", id)
 		} else {
-			log.Printf("Timer for reminder %s already expired or stopped", timer.ID)
+			log.Printf("Timer for reminder %s already expired or stopped", id)
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
