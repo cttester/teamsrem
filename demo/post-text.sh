@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source ./.env
+source .env
 curl  -d "@$1" \
   --header "Content-Type: application/json" \
   --request POST \
