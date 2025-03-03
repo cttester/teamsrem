@@ -21,7 +21,7 @@
           },
           {
             "type": "TextBlock",
-            "text": "Diese Nachricht soll dich daran erinnern, dass bald unsere große Jahresauftaktversammlung stattfindet:",
+            "text": "Dit bericht is om je eraan te herinneren dat onze grote beursplanvergadering begint:",
             "wrap": false
           },
           {
@@ -29,14 +29,14 @@
             "facts": [
               {
                 "title": "Datum",
-                "value": "16.01.2024"
+                "value": "16.06.2024"
               },
               {
-                "title": "Uhrzeit",
+                "title": "Tijdstip",
                 "value": "15:30"
               },
               {
-                "title": "Ort",
+                "title": "Locatie",
                 "value": "Teams"
               }
             ]
