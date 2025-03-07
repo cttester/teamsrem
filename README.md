@@ -1,15 +1,16 @@
-# Teams Reminder
+# Teams scripten
 
-**Frontend und Backend, um Nachrichten zeitgesteuert an Teams-Kanäle oder -Gruppenchats senden**
+Deze repository bevat een script en bijbehorend json-bestand om een bericht naar een Teams-kanaal te sturen.
+Meer informatie vind je in c't 5/2025.
 
-Beobachten Sie dann und wann an sich und Ihren Kollegen, dass sie nicht oder zu spät zu Videokonferenzen oder anderen Terminen erscheinen? Und das, obwohl Einladungen dazu per Mail oder auf anderen Kanälen herumgingen? Wenn Sie Teams zur Kommunikation verwenden, hilft Ihnen der *Teams Reminder*. In einem Frontend für den Webbrowser können Sie Erinnerungsnachrichten formulieren, die zu einstellbaren Zeitpunkten vor dem Ereignis automatisch an einen Teams-Kanal oder -Gruppenchat gesendet werden. Das erledigt ein in Go geschriebener Webservice ganz ohne Ihr Zutun im Hintergrund.
+De url's (voor webhook en teams-kanaal) zijn incompleet en moeten aangepast worden.
 
-![Im Frontend tippen Sie die Erinnerungsnachricht nebst Veranstaltungstermin ein und bestimmen die Zeitpunkte für die automatischen Erinnerungen.](https://github.com/user-attachments/assets/d7db7e67-4226-48ad-82ac-f0016fdd57ad)
+Een Python-versie die de webhook met vooraf bepaalde intervallen triggert vind je ook als voorbeeld in de repository.
 
-# Nutzungshinweise
+# Gebruik
 
-Diese Software wurde zu Lehr- und Demonstrationszwecken geschaffen und ist nicht für den produktiven Einsatz vorgesehen. Heise Medien und der Autor haften daher nicht für Schäden, die aus der Nutzung der Software entstehen, und übernehmen keine Gewähr für ihre Vollständigkeit, Fehlerfreiheit und Eignung für einen bestimmten Zweck.
+Deze software is alleen bestemd voor leer- en testdoeleinden en niet bestemd voor productief gebruik. F&L Media, Heise Medien en de auteur(s) zijn niet verantwoordelijk voor enige schade die het gevolg is van gebruik van deze software en garanderen niet dat die volledig, foutvrij of geschikt voor specifieke toepassingen is.
 
 # Terms Of Use
 
-This software was created for teaching and demonstration purposes and is not intended for productive use. Heise Medien and the author are therefore not liable for damages arising from the use of the software and do not guarantee its completeness, freedom from errors and suitability for a specific purpose.
+This software was created for teaching and demonstration purposes and is not intended for productive use. F&L Media, Heise Medien and the author(s) are therefore not liable for damages arising from the use of the software and do not guarantee its completeness, freedom from errors and suitability for a specific purpose.

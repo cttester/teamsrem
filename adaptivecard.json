@@ -46,7 +46,7 @@
           {
             "type": "Action.OpenUrl",
             "title": "Meeting-kanaal openen",
-            "url": "https://teams.microsoft.com/l/channel/19%3Ae71c93920f804fd08d4d78e8211d7bf5%40thread.tacv2/Testreminders?groupId=3df17907-e8e6-4bfa-b723-cf7f0c9d1c3a&tenantId=f6cf1902-1663-4a14-b785-106a3dc768d7"
+            "url": "https://teams.microsoft.com/l/channel/1..."
           }
         ]
       }
