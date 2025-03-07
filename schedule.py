@@ -65,7 +65,7 @@ def send(url: str, data: dict):
         print(f"""Herinnerung verzenden mislukt met HTTP-status-code {response.status_code}: '{response.text}'""")
 
 
-WEBHOOK_URL = "https://prod-38.westeurope.logic.azure.com:443/workflows/3a07d82974844022b0f22f2852df2229/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=mo8GgPYb-4MSX1IquVZlFZOs-AhyWQGhN0WxquqM-eI"
+WEBHOOK_URL = "https://prod-38.westeurope.logic.azure.com:443/workflows/WORKFLOW-ID/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=ACCESS-ID"
 
 def main():
     appointment_data = {
