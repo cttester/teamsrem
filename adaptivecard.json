@@ -1,0 +1,55 @@
+{
+  "type": "Message",
+  "attachments": [
+    {
+      "contentType": "application/vnd.microsoft.card.adaptive",
+      "contentUrl": null,
+      "content": {
+        "type": "AdaptiveCard",
+        "body": [
+          {
+            "type": "TextBlock",
+            "size": "large",
+            "weight": "bold",
+            "text": "DevOps",
+            "style": "heading",
+            "wrap": true
+          },
+          {
+            "type": "Image",
+            "url": "http://adaptivecards.io/content/cats/2.png"
+          },
+          {
+            "type": "TextBlock",
+            "text": "Dit bericht is om je eraan te herinneren dat onze grote beursplanvergadering begint:",
+            "wrap": false
+          },
+          {
+            "type": "FactSet",
+            "facts": [
+              {
+                "title": "Datum",
+                "value": "16.06.2025"
+              },
+              {
+                "title": "Tijdstip",
+                "value": "15:30"
+              },
+              {
+                "title": "Locatie",
+                "value": "Teams"
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "type": "Action.OpenUrl",
+            "title": "Meeting-kanaal openen",
+            "url": "https://teams.microsoft.com/l/channel/1..."
+          }
+        ]
+      }
+    }
+  ]
+}
