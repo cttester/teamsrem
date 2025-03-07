@@ -73,7 +73,7 @@ def main():
         "end_datetime": datetime.fromisoformat("2025-10-30T15:00:00"),
         "title": "Planvergadering",
         "message": "Onze aankomende meeting verschuift wegens feestdagen naar woensdag. Nieuwe afspraak:",
-        "channel_url": "https://teams.microsoft.com/l/channel/19%3A792962d748e64fc5b2da1edb61cbdc55%40thread.tacv2/General?groupId=98281a40-c89f-416d-b8f1-47ed5354401d&tenantId=30b24132-0c65-4261-ac6f-79103eb03e71",
+        "channel_url": "https://teams.microsoft.com/l/channel/...",
     }
 
     reminder_dt = sorted([
